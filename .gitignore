@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+*.local
+.visual-check/
+souls-remnant-build.json

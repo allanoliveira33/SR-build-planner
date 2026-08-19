@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#090b10" />
+  <meta name="color-scheme" content="dark" />
+  <title>Soul's Remnant — Build Planner</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header class="topbar game-panel">
+      <div class="brand">
+        <div class="brand-sigil" aria-hidden="true"><span>SR</span></div>
+        <div class="brand-copy">
+          <div class="eyebrow">Community build tool</div>
+          <h1>Soul's Remnant <span>Build Planner</span></h1>
+          <p>Planeje. Compare. Otimize.</p>
+        </div>
+      </div>
+
+      <div class="loadout-control">
+        <div class="control-label"><span>Loadout ativo</span><small>duplo clique para renomear</small></div>
+        <div class="loadout-strip" id="loadoutStrip"></div>
+      </div>
+
+      <div class="top-summary" aria-label="Resumo da build">
+        <span>Rotation DPS</span>
+        <strong id="quickRotationDps">0</strong>
+        <small>estimado · raw</small>
+      </div>
+
+      <div class="top-actions">
+        <button data-action="save" class="btn icon-btn" title="Salvar no navegador"><span aria-hidden="true">◆</span> Salvar</button>
+        <button data-action="export" class="btn icon-btn" title="Exportar JSON"><span aria-hidden="true">⇩</span> Exportar</button>
+        <button data-action="import" class="btn icon-btn" title="Importar JSON"><span aria-hidden="true">⇧</span> Importar</button>
+        <button data-action="share" class="btn accent icon-btn"><span aria-hidden="true">↗</span> Compartilhar</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="left-panel game-panel">
+        <div class="panel-heading">
+          <div><span class="eyebrow">Character</span><h2>Loadout ativo</h2></div>
+          <span class="status-orb" title="Alterações salvas localmente"></span>
+        </div>
+
+        <div class="left-scroll">
+          <section class="slot-section basic-section">
+            <div class="section-label"><span>Basic attack</span><small>1 slot</small></div>
+            <div class="slots single" id="basicSlots"></div>
+          </section>
+
+          <section class="slot-section">
+            <div class="section-label"><span>Buffs</span><small>3 slots</small></div>
+            <div class="slots triple" id="buffSlots"></div>
+          </section>
+
+          <section class="slot-section">
+            <div class="section-label"><span>Additional skills</span><small id="activeCountText">0 ativas</small></div>
+            <div class="slots grid" id="additionalSlots"></div>
+          </section>
+
+          <section class="weapon-box">
+            <div class="section-label"><span>Weapon attack</span><small>valores equipados</small></div>
+            <p class="microcopy">Informe as quatro linhas exatamente como aparecem no jogo.</p>
+            <div class="weapon-grid" id="weaponAttackInputs"></div>
+          </section>
+        </div>
+
+        <div class="left-footer">
+          <div class="quick-summary">
+            <div class="summary-card"><span>Active</span><strong id="activeCount">0</strong></div>
+            <div class="summary-card"><span>SP*</span><strong id="skillPointCount">0</strong></div>
+          </div>
+          <div class="left-actions">
+            <button data-action="reset-active" class="btn subtle">Limpar ativas</button>
+            <button data-action="reset-all" class="btn danger">Resetar</button>
+          </div>
+          <p class="microcopy note">*Estimativa: o custo inicial pode variar por skill.</p>
+        </div>
+      </aside>
+
+      <section class="center-panel game-panel">
+        <nav class="tabs" id="tabs" aria-label="Áreas do planner">
+          <button class="tab active" data-tab="tree"><span>01</span> Skill tree</button>
+          <button class="tab" data-tab="skills"><span>02</span> Skills</button>
+          <button class="tab" data-tab="dps"><span>03</span> DPS</button>
+          <button class="tab" data-tab="optimizer"><span>04</span> Optimizer</button>
+          <button class="tab" data-tab="data"><span>05</span> Modelo</button>
+        </nav>
+
+        <div class="tab-page active tree-page" data-page="tree">
+          <div class="tree-topline">
+            <div>
+              <span class="eyebrow">Combat progression</span>
+              <h2>Skill Tree</h2>
+              <p>Clique em um ícone para inspecionar e montar sua rotação.</p>
+            </div>
+            <div class="tree-status"><span class="pulse-dot"></span><span id="treeMapStatus">79 skills da wiki</span></div>
+          </div>
+
+          <div class="tree-toolbar">
+            <div class="category-filters" id="categoryFilters"></div>
+            <label class="search-wrap"><span aria-hidden="true">⌕</span><input id="skillSearch" type="search" placeholder="Buscar skill..." autocomplete="off" /></label>
+          </div>
+
+          <div class="tree-layout interactive-only">
+            <div class="tree-reference-card">
+              <div class="tree-frame-corner top-left"></div>
+              <div class="tree-frame-corner top-right"></div>
+              <div class="tree-reference" id="skillTree">
+                <img id="treeImage" src="assets/tree/CombatSkillTree.png" alt="Árvore interativa de Combat Skills de Soul's Remnant" draggable="false" />
+                <div class="tree-vignette" aria-hidden="true"></div>
+                <div id="treeHotspots" class="tree-hotspots" aria-label="Nós interativos da árvore"></div>
+                <div id="treeHighlight" class="tree-highlight hidden"></div>
+                <div id="treeHoverCard" class="tree-hover-card hidden"></div>
+              </div>
+              <div class="tree-reference-footer">
+                <div class="tree-help"><strong>Mapa oficial da wiki.gg</strong><span>Todos os nós usam posição e ícone reais. Skills sem fórmula no planner continuam navegáveis.</span></div>
+                <div class="tree-footer-actions">
+                  <button class="btn subtle" data-action="show-all-tree">Mostrar todas</button>
+                  <a class="btn subtle" href="https://soulsremnant.wiki.gg/wiki/Skills" target="_blank" rel="noreferrer">Abrir wiki</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tree-legend" aria-label="Legenda das categorias">
+            <span><i class="melee"></i>Melee</span><span><i class="range"></i>Range</span><span><i class="magic"></i>Magic</span><span><i class="faith"></i>Faith</span><span><i class="hybrid"></i>Hybrid</span>
+          </div>
+        </div>
+
+        <div class="tab-page" data-page="skills">
+          <div class="page-heading">
+            <div><span class="eyebrow">Build library</span><h2>Níveis ativos</h2><p>Defina somente o nível usado no loadout; o destino de cada skill é determinado pelo jogo.</p></div>
+          </div>
+          <div class="table-shell">
+            <table class="planner-table">
+              <thead><tr><th>Skill</th><th>Categoria</th><th>Destino</th><th>Active</th><th>Scaling / hit</th></tr></thead>
+              <tbody id="skillTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-page" data-page="dps">
+          <div class="page-heading">
+            <div><span class="eyebrow">Combat estimate</span><h2>Dano e rotação</h2><p>Estimativa bruta por hit e por ciclo, antes de DEF, resistências e downtime.</p></div>
+            <span class="badge experimental">Modelo experimental</span>
+          </div>
+          <div class="dps-grid">
+            <section class="card">
+              <div class="card-title-row"><div><h3>ATK bruto do personagem</h3><p>Antes dos atributos e da arma. A coleta indica 15 como base padrão.</p></div></div>
+              <div class="damage-input-grid" id="baseAttackInputs"></div>
+              <div class="subsection-title">Bônus de ATK da arma equipada</div>
+              <div class="damage-input-grid" id="weaponAttackInputsDps"></div>
+              <div class="attack-total" id="attackTotals"></div>
+              <div class="subsection-title">Atributos do personagem</div>
+              <div id="characterStatsGrid" class="stats-input-grid"></div>
+              <details class="advanced-box combat-stats-box">
+                <summary>Attack speed, crítico e outros stats</summary>
+                <p class="microcopy">Attack speed só reduz o cooldown quando a categoria está declarada nos dados da skill. Armor Pen e efeitos ficam salvos, mas exigem um alvo para entrar no cálculo.</p>
+                <div id="combatStatInputs" class="model-inputs combat-stat-inputs"></div>
+              </details>
+            </section>
+            <section class="card dps-summary-card">
+              <div class="card-kicker">Rotation readout</div><h3>Resumo</h3>
+              <div id="dpsSummary"></div>
+              <div class="dps-influence-block"><h4>Influência por tipo</h4><div id="dpsDamageInfluenceChart" class="damage-influence-chart compact"></div></div>
+              <p class="microcopy warning-copy">“Condicional” mostra o potencial máximo se todos os procs ocorrerem. Dados sem contagem explícita usam 1 hit.</p>
+            </section>
+          </div>
+          <section class="card dps-table-card">
+            <div class="card-title-row"><div><h3>Contribuição por skill</h3><p>Power e scaling são aplicados por hit/tick; ocorrências descritas são somadas a cada uso.</p></div></div>
+            <div class="table-shell">
+              <table class="planner-table dps-table">
+                <thead><tr><th>Skill</th><th>Lv</th><th>Scaling / hit</th><th>Ocorrências</th><th>Dano / hit</th><th>Dano / uso</th><th>CD</th><th>DPS</th><th>% do total</th></tr></thead>
+                <tbody id="dpsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <div class="tab-page" data-page="optimizer">
+          <div class="page-heading">
+            <div><span class="eyebrow">Build solver</span><h2>Optimizer</h2><p>Encontra atributos e compara os 11 arquétipos de arma.</p></div>
+            <span class="badge experimental">Experimental</span>
+          </div>
+          <div class="optimizer-grid">
+            <section class="optimizer-input card">
+              <div class="form-grid cols-3">
+                <label>Pontos disponíveis<input id="availablePoints" type="number" min="0" max="5000" value="120"></label>
+                <label>CON mínimo<input id="minCon" type="number" min="0" max="999" value="20"></label>
+                <label>Objetivo<select id="objectivePreset"><option value="dps">DPS máximo</option><option value="balanced">Balanceado</option><option value="survival">Sobrevivência</option><option value="custom">Personalizado</option></select></label>
+              </div>
+              <div class="weight-row">
+                <label><span>DPS</span><input id="dpsWeight" type="range" min="0" max="100" value="100"><output id="dpsWeightOut">100%</output></label>
+                <label><span>Sobrevivência</span><input id="survivalWeight" type="range" min="0" max="100" value="0"><output id="survivalWeightOut">0%</output></label>
+                <label><span>Suporte</span><input id="supportWeight" type="range" min="0" max="100" value="0"><output id="supportWeightOut">0%</output></label>
+              </div>
+              <div class="subsection-title">Atributos atuais</div>
+              <div id="baseStatsGrid" class="stats-input-grid"></div>
+              <div class="subsection-title">ATK bruto atual (padrão 15)</div>
+              <div class="damage-input-grid" id="optimizerBaseAttackInputs"></div>
+              <details class="advanced-box">
+                <summary>Bônus equivalentes das armas</summary>
+                <p class="microcopy">A comparação usa +30 Global como referência da coleta e preserva as proporções observadas entre Single, Dual e Global.</p>
+                <div class="form-grid cols-3">
+                  <label>Single / tipo<input id="weaponSinglePower" type="number" step="0.1" value="50.5"></label>
+                  <label>Dual / tipo<input id="weaponDualPower" type="number" step="0.1" value="38.1"></label>
+                  <label>Global / tipo<input id="weaponGlobalPower" type="number" step="0.1" value="30"></label>
+                </div>
+                <div class="weapon-evidence">
+                  <div><strong>Tier</strong><strong>Single</strong><strong>Dual/tipo</strong><strong>Global/tipo</strong></div>
+                  <div><span>Stone</span><span>12,5</span><span>9,0</span><span>7,0</span></div>
+                  <div><span>Copper</span><span>17,5</span><span>13,0</span><span>10,5</span></div>
+                  <div><span>Quartz</span><span>22,5</span><span>18,0</span><span>14,0</span></div>
+                </div>
+              </details>
+              <div class="optimizer-actions">
+                <button class="btn accent large" data-action="optimize">Otimizar build completa</button>
+                <button class="btn subtle" data-action="compare">Ler build atual</button>
+              </div>
+            </section>
+
+            <section class="optimizer-result card">
+              <div class="card-kicker">Solver output</div><h3>Recomendação</h3>
+              <div id="optimizerEmpty" class="empty-state">Ative ao menos uma skill ofensiva com cooldown e clique em <strong>Otimizar build completa</strong>.</div>
+              <div id="optimizerResults" class="hidden">
+                <div id="weaponRecommendation" class="weapon-recommendation"></div>
+                <div id="recommendedStats" class="recommended-stats"></div>
+                <div class="result-metrics" id="resultMetrics"></div>
+                <h4>Ranking de armas</h4><div id="weaponRanking" class="weapon-ranking"></div>
+                <h4>Distribuição</h4><div id="ratioBars" class="ratio-bars"></div>
+                <h4>Próximo ponto</h4><div id="marginalTable" class="marginal-table"></div>
+                <h4>Contribuição</h4><div id="skillContribution" class="skill-contribution"></div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div class="tab-page" data-page="data">
+          <div class="page-heading">
+            <div><span class="eyebrow">Transparent model</span><h2>Dados e fórmulas</h2><p>Ajuste parâmetros experimentais sem alterar o código.</p></div>
+            <button class="btn subtle" data-action="reset-model">Restaurar modelo</button>
+          </div>
+          <div class="data-grid">
+            <section class="card attribute-formula-card">
+              <div class="card-title-row"><div><span class="card-kicker">Coleta in-game</span><h3>Curvas de atributos × arma</h3><p>Regressões lineares calibradas entre 0–200 pontos, isolando o bônus de ATK da arma.</p></div><span id="attributeFitSummary" class="fit-badge"></span></div>
+              <div class="formula-definition"><strong>W<sub>tipo</sub></strong><span>= bônus de ATK da arma naquele tipo; a parcela restante usa o ATK inato B = 15</span></div>
+              <div id="attributeFormulaGrid" class="attribute-formula-grid"></div>
+              <div class="attribute-analysis-grid">
+                <div class="table-shell formula-table-shell"><table class="planner-table formula-table"><thead><tr><th>Status</th><th>Tipos afetados</th><th>Impacto por ponto: base 15 + W isolado</th></tr></thead><tbody id="attributeImpactBody"></tbody></table></div>
+                <aside class="damage-influence-card"><span class="card-kicker">Build atual</span><h4>Influência no DPS</h4><p>Participação de cada linha de scaling no DPS disponível.</p><div id="dataDamageInfluenceChart" class="damage-influence-chart"></div></aside>
+              </div>
+            </section>
+            <section class="card"><h3>Outros coeficientes</h3><div id="modelInputs" class="model-inputs"></div></section>
+            <section class="card"><h3>Dados das skills</h3><p>Campos desconhecidos permanecem vazios e fora do cálculo.</p><div class="data-skill-list" id="dataSkillList"></div></section>
+            <section class="card sources-card">
+              <h3>Fontes e método</h3>
+              <a target="_blank" rel="noreferrer" href="https://sro.wiki/index.php/Category:Skills">sro.wiki — Skills</a>
+              <a target="_blank" rel="noreferrer" href="https://sro.wiki/index.php/Category:Weapon">sro.wiki — Weapons</a>
+              <a target="_blank" rel="noreferrer" href="https://sro.wiki/index.php/Player_Stats">sro.wiki — Player Stats</a>
+              <p class="microcopy"><strong>Curvas de atributo:</strong> coleta in-game fornecida pelo projeto, 0–200 pontos com e sem arma +30 Global.</p>
+              <p class="microcopy">Scaling no Lv N = base + incremento × (N − 1).</p>
+              <p class="microcopy"><strong>Dano/hit</strong> = Power + Σ(ATK do tipo × scaling do tipo). <strong>DPS</strong> = dano/hit × fator total ÷ cooldown efetivo; toggles contínuos usam ticks/s.</p>
+              <p class="microcopy">Efeitos condicionais pressupõem todos os procs descritos. Multiplicadores de boss, distância e quantidade de alvos não entram no cálculo. Não é um valor oficial do jogo.</p>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <aside class="right-panel game-panel">
+        <div class="panel-heading inspector-heading">
+          <div><span class="eyebrow">Selected node</span><h2>Skill inspector</h2></div><span class="key-hint">K</span>
+        </div>
+        <div id="skillInspector" class="inspector empty"><div class="empty-state">Selecione uma skill na árvore.</div></div>
+      </aside>
+    </main>
+
+    <footer class="footer game-panel">
+      <span><i class="status-orb"></i> Dados locais · autosave ativo</span>
+      <span>Fan-made planner para Soul's Remnant</span>
+      <span>Modelo <strong>experimental</strong> · Early Access</span>
+    </footer>
+  </div>
+
+  <input id="importFile" type="file" accept="application/json,.json" hidden />
+  <script src="tree-map-data.js"></script>
+  <script src="skill-data.js"></script>
+  <script src="formulas.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

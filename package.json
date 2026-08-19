@@ -1,0 +1,12 @@
+{
+  "name": "souls-remnant-build-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Planner local e offline para builds de Soul's Remnant.",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check app.js && node --check skill-data.js && node --check tree-map-data.js && node --check formulas.js && node --check scripts/updateWikiAssets.mjs && node --check scripts/buildSkillData.mjs",
+    "sync:skills": "node scripts/buildSkillData.mjs",
+    "sync:wiki-assets": "node scripts/updateWikiAssets.mjs && node scripts/buildSkillData.mjs"
+  }
+}

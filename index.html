@@ -28,7 +28,7 @@
       <div class="top-summary" aria-label="Resumo da build">
         <span>Rotation DPS</span>
         <strong id="quickRotationDps">0</strong>
-        <small>estimado · raw</small>
+        <small>estimado · contexto atual</small>
       </div>
 
       <div class="top-actions">
@@ -53,7 +53,7 @@
           </section>
 
           <section class="slot-section">
-            <div class="section-label"><span>Buffs</span><small>3 slots</small></div>
+            <div class="section-label"><span>Buffs</span><small>2 slots · 3º no nível 60</small></div>
             <div class="slots triple" id="buffSlots"></div>
           </section>
 
@@ -62,23 +62,21 @@
             <div class="slots grid" id="additionalSlots"></div>
           </section>
 
-          <section class="weapon-box">
-            <div class="section-label"><span>Weapon attack</span><small>valores equipados</small></div>
-            <p class="microcopy">Informe as quatro linhas exatamente como aparecem no jogo.</p>
-            <div class="weapon-grid" id="weaponAttackInputs"></div>
-          </section>
         </div>
 
         <div class="left-footer">
           <div class="quick-summary">
             <div class="summary-card"><span>Active</span><strong id="activeCount">0</strong></div>
-            <div class="summary-card"><span>SP*</span><strong id="skillPointCount">0</strong></div>
+            <div class="summary-card"><span>SP usado</span><strong id="skillPointCount">0</strong></div>
+            <div class="summary-card"><span>SP disponível</span><strong id="skillPointBudget">1</strong></div>
+            <div class="summary-card"><span>Nível mínimo</span><strong id="buildMinLevel">1</strong></div>
           </div>
+          <p id="buildRuleWarning" class="build-rule-warning hidden"></p>
           <div class="left-actions">
             <button data-action="reset-active" class="btn subtle">Limpar ativas</button>
             <button data-action="reset-all" class="btn danger">Resetar</button>
           </div>
-          <p class="microcopy note">*Estimativa: o custo inicial pode variar por skill.</p>
+          <p class="microcopy note">SP calculado pela tabela cumulativa capturada do jogo. Buffs e proficiências não consomem SP.</p>
         </div>
       </aside>
 
@@ -86,9 +84,10 @@
         <nav class="tabs" id="tabs" aria-label="Áreas do planner">
           <button class="tab active" data-tab="tree"><span>01</span> Skill tree</button>
           <button class="tab" data-tab="skills"><span>02</span> Skills</button>
-          <button class="tab" data-tab="dps"><span>03</span> DPS</button>
-          <button class="tab" data-tab="optimizer"><span>04</span> Optimizer</button>
-          <button class="tab" data-tab="data"><span>05</span> Modelo</button>
+          <button class="tab" data-tab="status"><span>03</span> Status</button>
+          <button class="tab" data-tab="dps"><span>04</span> DPS</button>
+          <button class="tab" data-tab="optimizer"><span>05</span> Optimizer</button>
+          <button class="tab" data-tab="data"><span>06</span> Modelo</button>
         </nav>
 
         <div class="tab-page active tree-page" data-page="tree">
@@ -138,44 +137,67 @@
           </div>
           <div class="table-shell">
             <table class="planner-table">
-              <thead><tr><th>Skill</th><th>Categoria</th><th>Destino</th><th>Active</th><th>Scaling / hit</th></tr></thead>
+              <thead><tr><th>Skill</th><th>Categoria</th><th>Destino</th><th>Active</th><th>SP</th><th>Scaling / hit</th></tr></thead>
               <tbody id="skillTableBody"></tbody>
             </table>
           </div>
         </div>
 
-        <div class="tab-page" data-page="dps">
+        <div class="tab-page" data-page="status">
           <div class="page-heading">
-            <div><span class="eyebrow">Combat estimate</span><h2>Dano e rotação</h2><p>Estimativa bruta por hit e por ciclo, antes de DEF, resistências e downtime.</p></div>
-            <span class="badge experimental">Modelo experimental</span>
+            <div><span class="eyebrow">Character sheet</span><h2>Status do personagem</h2><p>Todas as entradas do personagem e o resultado consolidado das fórmulas de runtime.</p></div>
+            <span class="badge experimental">Runtime capturado</span>
           </div>
-          <div class="dps-grid">
-            <section class="card">
-              <div class="card-title-row"><div><h3>ATK bruto do personagem</h3><p>Antes dos atributos e da arma. A coleta indica 15 como base padrão.</p></div></div>
-              <div class="damage-input-grid" id="baseAttackInputs"></div>
-              <div class="subsection-title">Bônus de ATK da arma equipada</div>
-              <div class="damage-input-grid" id="weaponAttackInputsDps"></div>
-              <div class="attack-total" id="attackTotals"></div>
-              <div class="subsection-title">Atributos do personagem</div>
+          <div class="status-layout">
+            <section class="card status-input-card">
+              <h3>Progressão</h3>
+              <label class="character-level-field">Nível do personagem<input id="characterLevelInput" type="number" min="1" max="99" step="1" value="1"></label>
+              <div id="passiveLevelInputs" class="passive-level-grid"></div>
+              <div id="passiveBonusSummary" class="passive-bonus-summary"></div>
+              <div class="subsection-title">Pontos aplicados</div>
               <div id="characterStatsGrid" class="stats-input-grid"></div>
-              <details class="advanced-box combat-stats-box">
-                <summary>Attack speed, crítico e outros stats</summary>
-                <p class="microcopy">Attack speed só reduz o cooldown quando a categoria está declarada nos dados da skill. Armor Pen e efeitos ficam salvos, mas exigem um alvo para entrar no cálculo.</p>
+              <div class="subsection-title">Bônus aditivo e percentual dos atributos</div>
+              <div id="primaryAdditionalInputs" class="status-matrix"></div>
+              <div class="subsection-title">ATK da arma por tipo</div>
+              <p class="microcopy">O poder inato 15 é somado automaticamente. Preencha somente os bônus equipados.</p>
+              <div class="weapon-grid" id="weaponAttackInputs"></div>
+              <div class="subsection-title">Modificadores adicionais</div>
+              <div id="statusModifierInputs" class="model-inputs combat-stat-inputs"></div>
+              <details class="advanced-box" open>
+                <summary>Combate, cooldown e alvo</summary>
                 <div id="combatStatInputs" class="model-inputs combat-stat-inputs"></div>
+                <div id="combatContextInputs" class="model-inputs combat-stat-inputs"></div>
               </details>
             </section>
+            <section class="card character-sheet-card">
+              <div class="card-kicker">Build atual</div><h3>Compilado do personagem</h3>
+              <div id="apSummary" class="dps-metric"></div>
+              <div id="characterPrimarySummary" class="character-sheet-section"></div>
+              <div id="attackTotals" class="attack-total"></div>
+              <div id="characterProgressionStats" class="derived-stat-grid"></div>
+              <div id="fullCharacterSheet" class="character-sheet-section"></div>
+            </section>
+          </div>
+        </div>
+
+        <div class="tab-page" data-page="dps">
+          <div class="page-heading">
+            <div><span class="eyebrow">Combat estimate</span><h2>Dano e rotação</h2><p>Estimativa esperada com defesa, accuracy, crítico, elemento e contexto configurados.</p></div>
+            <span class="badge experimental">Modelo experimental</span>
+          </div>
+          <div class="dps-grid dps-results-only">
             <section class="card dps-summary-card">
               <div class="card-kicker">Rotation readout</div><h3>Resumo</h3>
               <div id="dpsSummary"></div>
               <div class="dps-influence-block"><h4>Influência por tipo</h4><div id="dpsDamageInfluenceChart" class="damage-influence-chart compact"></div></div>
-              <p class="microcopy warning-copy">“Condicional” mostra o potencial máximo se todos os procs ocorrerem. Dados sem contagem explícita usam 1 hit.</p>
+              <p class="microcopy warning-copy">Os valores usam o contexto configurado na aba Status. Skills sem contagem explícita usam 1 hit.</p>
             </section>
           </div>
           <section class="card dps-table-card">
             <div class="card-title-row"><div><h3>Contribuição por skill</h3><p>Power e scaling são aplicados por hit/tick; ocorrências descritas são somadas a cada uso.</p></div></div>
             <div class="table-shell">
               <table class="planner-table dps-table">
-                <thead><tr><th>Skill</th><th>Lv</th><th>Scaling / hit</th><th>Ocorrências</th><th>Dano / hit</th><th>Dano / uso</th><th>CD</th><th>DPS</th><th>% do total</th></tr></thead>
+                <thead><tr><th>Skill</th><th>Lv</th><th>Scaling / hit</th><th>Ocorrências</th><th>Dano / hit</th><th>Dano / uso</th><th>CD</th><th>DPS</th><th>MP/s</th><th>% do total</th></tr></thead>
                 <tbody id="dpsTableBody"></tbody>
               </table>
             </div>
@@ -190,8 +212,8 @@
           <div class="optimizer-grid">
             <section class="optimizer-input card">
               <div class="form-grid cols-3">
-                <label>Pontos disponíveis<input id="availablePoints" type="number" min="0" max="5000" value="120"></label>
-                <label>CON mínimo<input id="minCon" type="number" min="0" max="999" value="20"></label>
+                <label>Pontos disponíveis<input id="availablePoints" type="number" min="0" max="5000" value="0"></label>
+                <label>CON mínimo<input id="minCon" type="number" min="0" max="999" value="0"></label>
                 <label>Objetivo<select id="objectivePreset"><option value="dps">DPS máximo</option><option value="balanced">Balanceado</option><option value="survival">Sobrevivência</option><option value="custom">Personalizado</option></select></label>
               </div>
               <div class="weight-row">
@@ -199,10 +221,7 @@
                 <label><span>Sobrevivência</span><input id="survivalWeight" type="range" min="0" max="100" value="0"><output id="survivalWeightOut">0%</output></label>
                 <label><span>Suporte</span><input id="supportWeight" type="range" min="0" max="100" value="0"><output id="supportWeightOut">0%</output></label>
               </div>
-              <div class="subsection-title">Atributos atuais</div>
-              <div id="baseStatsGrid" class="stats-input-grid"></div>
-              <div class="subsection-title">ATK bruto atual (padrão 15)</div>
-              <div class="damage-input-grid" id="optimizerBaseAttackInputs"></div>
+              <p class="microcopy">A build inicial e os bônus equipados vêm exclusivamente da aba <strong>Status</strong>.</p>
               <details class="advanced-box">
                 <summary>Bônus equivalentes das armas</summary>
                 <p class="microcopy">A comparação usa +30 Global como referência da coleta e preserva as proporções observadas entre Single, Dual e Global.</p>
@@ -247,13 +266,18 @@
           </div>
           <div class="data-grid">
             <section class="card attribute-formula-card">
-              <div class="card-title-row"><div><span class="card-kicker">Coleta in-game</span><h3>Curvas de atributos × arma</h3><p>Regressões lineares calibradas entre 0–200 pontos, isolando o bônus de ATK da arma.</p></div><span id="attributeFitSummary" class="fit-badge"></span></div>
-              <div class="formula-definition"><strong>W<sub>tipo</sub></strong><span>= bônus de ATK da arma naquele tipo; a parcela restante usa o ATK inato B = 15</span></div>
+              <div class="card-title-row"><div><span class="card-kicker">Runtime do jogo</span><h3>Atributos × ataque</h3><p>Fórmulas reconstruídas do runtime capturado e consolidadas no compêndio.</p></div><span id="attributeFitSummary" class="fit-badge"></span></div>
+              <div class="formula-definition"><strong>15 + ATK aditivo</strong><span>= poder inato do personagem + bônus global e do tipo; depois entram scaling, percentuais e conversões</span></div>
               <div id="attributeFormulaGrid" class="attribute-formula-grid"></div>
               <div class="attribute-analysis-grid">
-                <div class="table-shell formula-table-shell"><table class="planner-table formula-table"><thead><tr><th>Status</th><th>Tipos afetados</th><th>Impacto por ponto: base 15 + W isolado</th></tr></thead><tbody id="attributeImpactBody"></tbody></table></div>
+                <div class="table-shell formula-table-shell"><table class="planner-table formula-table"><thead><tr><th>Status</th><th>Tipos afetados</th><th>Impacto por ponto sobre o ATK do tipo</th></tr></thead><tbody id="attributeImpactBody"></tbody></table></div>
                 <aside class="damage-influence-card"><span class="card-kicker">Build atual</span><h4>Influência no DPS</h4><p>Participação de cada linha de scaling no DPS disponível.</p><div id="dataDamageInfluenceChart" class="damage-influence-chart"></div></aside>
               </div>
+            </section>
+            <section class="card progression-model-card">
+              <div class="card-title-row"><div><span class="card-kicker">Progressão do personagem</span><h3>HP, MP, SP e proficiências</h3><p>Constantes e equações atuais do compêndio de fórmulas.</p></div></div>
+              <div id="progressionFormulaGrid" class="progression-formula-grid"></div>
+              <div id="passiveRulesGrid" class="passive-rules-grid"></div>
             </section>
             <section class="card"><h3>Outros coeficientes</h3><div id="modelInputs" class="model-inputs"></div></section>
             <section class="card"><h3>Dados das skills</h3><p>Campos desconhecidos permanecem vazios e fora do cálculo.</p><div class="data-skill-list" id="dataSkillList"></div></section>
@@ -262,10 +286,10 @@
               <a target="_blank" rel="noreferrer" href="https://sro.wiki/index.php/Category:Skills">sro.wiki — Skills</a>
               <a target="_blank" rel="noreferrer" href="https://sro.wiki/index.php/Category:Weapon">sro.wiki — Weapons</a>
               <a target="_blank" rel="noreferrer" href="https://sro.wiki/index.php/Player_Stats">sro.wiki — Player Stats</a>
-              <p class="microcopy"><strong>Curvas de atributo:</strong> coleta in-game fornecida pelo projeto, 0–200 pontos com e sem arma +30 Global.</p>
+              <p class="microcopy"><strong>Fonte principal:</strong> compêndio local reconstruído do runtime. A referência de nível 42 e passivas 40/41/45/45 é usada apenas para validar as fórmulas; a build inicial permanece limpa.</p>
               <p class="microcopy">Scaling no Lv N = base + incremento × (N − 1).</p>
-              <p class="microcopy"><strong>Dano/hit</strong> = Power + Σ(ATK do tipo × scaling do tipo). <strong>DPS</strong> = dano/hit × fator total ÷ cooldown efetivo; toggles contínuos usam ticks/s.</p>
-              <p class="microcopy">Efeitos condicionais pressupõem todos os procs descritos. Multiplicadores de boss, distância e quantidade de alvos não entram no cálculo. Não é um valor oficial do jogo.</p>
+              <p class="microcopy"><strong>ATK do tipo</strong> = 15 + aditivos. <strong>Dano do tipo</strong> = ATK × (30 + scaling dos atributos) ÷ 30 × percentuais. <strong>Skill Power</strong> é truncado antes do fator 0,94 e da pipeline do alvo.</p>
+              <p class="microcopy">Defesa, accuracy, crítico esperado, elemento, carga, distância, boss e efeitos de contexto usam os valores definidos na aba Status.</p>
             </section>
           </div>
         </div>

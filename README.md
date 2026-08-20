@@ -17,7 +17,7 @@ Os testes usam apenas o runner nativo do Node.js.
 
 1. Clique em um ícone da árvore de skills.
 2. Use os filtros ou a busca para destacar uma rota; todos os 79 nós continuam navegáveis.
-3. Ajuste apenas o nível Active; cada skill vai para o destino válido do loadout.
+3. Informe o nível do personagem, ajuste as quatro proficiências (máximo 99) e defina o nível Active das skills equipadas.
 4. Na aba **DPS**, informe os ataques base, os quatro danos da arma, atributos e stats de combate.
 5. Consulte a contribuição das skills ou rode o **Optimizer** para comparar os 11 arquétipos de arma.
 6. Salve localmente, exporte JSON ou compartilhe a build pela URL.
@@ -27,7 +27,7 @@ Os testes usam apenas o runner nativo do Node.js.
 - `skills.json`: exportação completa do mapa da wiki.gg usada como fonte.
 - `skill-data.js`: 79 skills geradas, arquétipos, fontes e confiança dos dados.
 - `tree-map-data.js`: coordenadas, grupos e caminhos dos ícones do mapa oficial da wiki.gg.
-- `formulas.js`: funções puras de scaling, dano, crítico, cooldown e vetores de arma.
+- `formulas.js`: funções puras de scaling, dano, progressão, SP, crítico, cooldown e vetores de arma.
 - `app.js`: estado, persistência, renderização e interações.
 - `styles.css`: sistema visual e layouts responsivos.
 - `tests/formulas.test.js`: testes do modelo matemático.
@@ -64,15 +64,29 @@ Contagens explícitas da descrição prevalecem. Quando só existem `Attacks/sec
 
 ## Modelo de atributos
 
-O optimizer usa regressões da coleta in-game entre 0 e 200 pontos, sem arma e com uma arma de +30 Global. O bônus da arma é o parâmetro principal: `W` significa o ATK que a arma acrescenta naquele tipo. Com o ATK inato observado de 15, as fórmulas ficam:
+O planner usa as fórmulas reconstruídas do runtime, documentadas em `Souls_Remnant_formula_compendium.md`. Cada atributo efetivo começa em 1 e recebe pontos aplicados, bônus aditivos e percentuais antes de alimentar as quatro linhas de dano:
 
 ```text
-Melee ≈ Wₘ × (1,13333 + 0,03727 STR + 0,00931 SPR) + 16 + 0,55905 STR + 0,13965 SPR
-Range ≈ Wᵣ × (1,13333 + 0,03762 DEX + 0,00752 SPR) + 16 + 0,56430 DEX + 0,11280 SPR
-Magic ≈ Wₐ × (1,10000 + 0,03687 INT + 0,01668 SPR) + 16 + 0,55305 INT + 0,25020 SPR
-Faith ≈ W𝒻 × (1,13333 + 0,00944 STR + 0,03762 SPR) + 16 + 0,14160 STR + 0,56430 SPR
+MeleeScale = STR + 0,26 CON + 0,25 SPR
+RangeScale = DEX + 0,65 LUK + 0,20 SPR
+MagicScale = INT + 0,45 SPR + 0,35 LUK
+FaithScale = SPR + 0,25 STR + 0,2925 CON
+DanoTipo = ATKTipo × (30 + ScaleTipo) ÷ 30 × DanoGlobal% × DanoTipo%
 ```
 
-Assim, por exemplo, cada ponto de STR acrescenta `0,03727 × Wₘ` ao dano vindo da arma Melee, além de `0,55905` gerado pelos 15 pontos inatos. Os ajustes têm `R²` entre aproximadamente `0,9976` e `1,0000`. A aba **Modelo** mostra essa decomposição sem depender de uma arma de referência fixa.
+`ATKTipo` começa em 15, soma ATK global aditivo e ATK aditivo daquele tipo. Conversões são calculadas a partir das quatro linhas originais para que uma conversão nunca alimente outra.
 
 As abas **DPS** e **Modelo** também apresentam quatro indicadores circulares. Eles decompõem o DPS disponível pelas linhas de scaling Melee, Range, Magic e Faith; as participações somam 100% quando existe ao menos uma skill ofensiva calculável.
+
+## Progressão, proficiências e SP
+
+Uma build nova começa limpa: personagem no nível 1, atributos distribuídos, proficiências, skills, arma e bônus adicionais em zero. Valores intrínsecos do jogo, como os atributos-base e os recursos iniciais de HP/MP, continuam sendo aplicados pelas fórmulas. O personagem de nível 42 com Melee 40, Range 41, Magic 45 e Faith 45 permanece somente como referência de validação da coleta. As proficiências têm máximo 99 e seus bônus por marco entram nos stats derivados:
+
+```text
+Max HP ≈ 50 + 2,5 × (nível − 1) + 2,5 × CON + 2 × floor(Melee / 5)
+Max MP ≈ 10 + (nível − 1) + 1,2 × SPR + 2 × floor(Magic / 5)
+Defense ≈ 0,1 × CON + floor(Melee / 8)
+SP disponível = nível + floor(nível / 5) + floor(nível / 10)
+```
+
+HP regen, MP regen e Crit Rate usam as equações do runtime, não interpolação. Cada skill consulta sua tabela cumulativa real de SP capturada; buffs e proficiências custam zero. Additional Skills não têm limite. O terceiro buff exige nível 60, e o planner combina essa regra com o orçamento de SP para mostrar o nível mínimo do setup. Todas as entradas do personagem ficam na aba **Status**, junto da ficha consolidada.

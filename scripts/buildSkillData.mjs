@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const jsonPath = path.join(ROOT, 'skills.json');
+const runtimePath = path.join(ROOT, 'Souls_Remnant_TCP_capture_decoded', 'sr_capture_decoded', 'skills_full_current.json');
 const outputPath = path.join(ROOT, 'skill-data.js');
 
 const DAMAGE_KEYS = new Set(['melee', 'range', 'magic', 'faith']);
@@ -23,13 +24,29 @@ const ACTIVE_BUFFS = new Set([
   'Life Line',
   'Perseverance'
 ]);
-const INITIAL_ACTIVE_LEVELS = {
-  slash: 5,
-  heavy_strike: 5,
-  upward_strike: 3,
-  onslaught: 5,
-  taunt: 5,
-  revitalize: 4
+const INITIAL_ACTIVE_LEVELS = {};
+
+const PROFICIENCY_BONUSES = {
+  melee: [
+    { key: 'maxHp', label: 'Max HP', every: 5, amount: 2 },
+    { key: 'defense', label: 'Defense', every: 8, amount: 1 },
+    { key: 'hpRegen', label: 'HP regen / tick', every: 12, amount: 1 }
+  ],
+  range: [
+    { key: 'critChance', label: 'Crit Rate', every: 6, amount: 1, unit: '%' },
+    { key: 'hpOnHitChance', label: 'HP on hit chance', every: 6, amount: 1, unit: '%' },
+    { key: 'mpOnHitChance', label: 'MP on hit chance', every: 8, amount: 1, unit: '%' }
+  ],
+  magic: [
+    { key: 'shield', label: 'Shield', every: 2, amount: 2 },
+    { key: 'maxMp', label: 'Max MP', every: 5, amount: 2 },
+    { key: 'mpRegen', label: 'MP regen / tick', every: 12, amount: 1 }
+  ],
+  faith: [
+    { key: 'elementPotency', label: 'Elemental Potency', every: 5, amount: 1, unit: '%' },
+    { key: 'damageReduction', label: 'Damage Reduction', every: 6, amount: 1, unit: '%' },
+    { key: 'elementChance', label: 'Elemental Chance', every: 9, amount: 1, unit: '%' }
+  ]
 };
 
 // Os valores de scaling expostos pelo jogo são tratados como dano por
@@ -189,6 +206,7 @@ function panelTypeFor(marker, kind) {
   if (FORCED_BASIC_ATTACKS.has(marker.name)) return 'basic';
   if (FORCED_ADDITIONAL_SKILLS.has(marker.name)) return 'additional';
   if (kind === 'Basic Attack') return 'basic';
+  if (/proficiency\s*\(passive\)/i.test(kind)) return 'passive';
   if (/passive|buff\s*\/\s*toggle/i.test(kind) || ACTIVE_BUFFS.has(marker.name)) return 'buff';
   return 'additional';
 }
@@ -239,18 +257,28 @@ function hitProfile(id, attacksPerSecond, duration) {
 }
 
 const map = JSON.parse(await fs.readFile(jsonPath, 'utf8'));
+const runtimeDocument = JSON.parse(await fs.readFile(runtimePath, 'utf8'));
+const runtimeById = new Map(runtimeDocument.skills.map(skill => [skill.skill_id, skill.runtime]));
 const markers = Object.entries(map.markers).flatMap(([group, entries]) => entries.map(marker => ({ ...marker, group })));
 const skills = markers.map(marker => {
   const id = idFromName(marker.name);
   const sourceSkillKind = skillKind(marker);
   const kind = FORCED_BASIC_ATTACKS.has(marker.name) ? 'Basic Attack' : FORCED_ADDITIONAL_SKILLS.has(marker.name) ? 'Active' : sourceSkillKind;
-  const scalings = parseScaling(marker.description);
+  const runtime = runtimeById.get(Number(marker.id.replace('skill-', '')));
+  const wikiScalings = parseScaling(marker.description);
+  const scalings = runtime?.scalings?.length
+    ? Object.fromEntries(runtime.scalings.map(scaling => {
+      const key = ({ melee_damage: 'melee', range_damage: 'range', magic_damage: 'magic', faith_damage: 'faith', max_hp: 'health', max_mp: 'mana' })[scaling.id] || scaling.id;
+      const multiplier = DAMAGE_KEYS.has(key) ? 100 : 1;
+      return [key, { base: Number((scaling.amount * multiplier).toFixed(6)), perLevel: Number((scaling.per_level * multiplier).toFixed(6)) }];
+    }))
+    : wikiScalings;
   const damageTypes = Object.keys(scalings).filter(key => DAMAGE_KEYS.has(key));
   const initialActiveLevel = INITIAL_ACTIVE_LEVELS[id] || 0;
-  const cooldownMs = Number.parseFloat(rawField(marker.description, 'Cooldown'));
-  const durationMs = Number.parseFloat(rawField(marker.description, 'Duration'));
-  const attacksPerSecond = Number.parseFloat(rawField(marker.description, 'Attacks/sec'));
-  const basePower = levelValue(stripWiki(rawField(marker.description, 'Base power')));
+  const cooldownMs = runtime?.cooldown_ms ?? Number.parseFloat(rawField(marker.description, 'Cooldown'));
+  const durationMs = runtime?.duration_ms ?? Number.parseFloat(rawField(marker.description, 'Duration'));
+  const attacksPerSecond = runtime?.attack_per_second ?? Number.parseFloat(rawField(marker.description, 'Attacks/sec'));
+  const basePower = runtime ? { base: runtime.base_power, perLevel: runtime.power_per_level } : levelValue(stripWiki(rawField(marker.description, 'Base power')));
   const unlock = stripWiki(marker.description.match(/'''Unlock:'''<\/span>\s*([^\n]+)/i)?.[1] || '');
   const panelType = panelTypeFor(marker, kind);
   const duration = Number.isFinite(durationMs) ? durationMs / 1000 : 0;
@@ -263,7 +291,7 @@ const skills = markers.map(marker => {
     name: marker.name,
     short: shortName(marker.name),
     icon: `assets/skill-icons/${assetSlug(marker.icon.replace(/\.png$/i, ''))}.png`,
-    category: panelType === 'buff' ? 'utility' : damageTypes.length > 1 ? 'hybrid' : marker.group,
+    category: panelType === 'buff' || panelType === 'passive' ? 'utility' : damageTypes.length > 1 ? 'hybrid' : marker.group,
     group: marker.group,
     classes: skillClasses(marker.description, marker.group),
     panelType,
@@ -271,17 +299,26 @@ const skills = markers.map(marker => {
     skillKind: kind,
     sourceSkillKind,
     activeLevel: initialActiveLevel,
-    activeMax: 20,
+    activeMax: panelType === 'passive' ? 99 : 20,
+    spCostBase: panelType === 'buff' || panelType === 'passive' ? 0 : runtime?.sp_costs_cumulative?.[0] ?? 1,
+    spCosts: panelType === 'buff' || panelType === 'passive' ? Array(20).fill(0) : runtime?.sp_costs_cumulative || [],
+    progressionBonuses: panelType === 'passive' ? PROFICIENCY_BONUSES[id] || [] : [],
     cooldown: Number.isFinite(cooldownMs) && cooldownMs > 0 ? cooldownMs / 1000 : null,
+    cooldownMs: Number.isFinite(cooldownMs) ? cooldownMs : 0,
     duration,
+    durationRuntime: { base: duration, perLevel: (runtime?.duration_per_level_ms || 0) / 1000 },
+    durationRuntimeMs: { base: Number.isFinite(durationMs) ? durationMs : 0, perLevel: runtime?.duration_per_level_ms || 0 },
     attacksPerSecond: attacksPerSecondValue,
+    attackCount: runtime?.attack_count || 1,
+    mobCount: { base: runtime?.mob_count || 1, perLevel: runtime?.mob_count_per_level || 0 },
+    mpCost: { base: runtime?.mp_base || 0, perLevel: runtime?.mp_per_level || 0 },
     ...hits,
     basePower,
     mpRegenPenalty: mpRegenPenalty(marker.description),
     description: descriptionBody(marker.description),
     unlock,
-    sourceStatus: 'skills.json · wiki.gg',
-    confidence: 'wiki',
+    sourceStatus: runtime ? 'runtime capturado + skills.json' : 'skills.json · wiki.gg',
+    confidence: runtime ? 'confirmed' : 'wiki',
     scalings,
     damageTypes,
     nonDamage: damageTypes.length === 0,

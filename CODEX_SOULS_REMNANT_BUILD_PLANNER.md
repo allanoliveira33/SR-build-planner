@@ -197,11 +197,15 @@ Um slot.
 
 ## Buffs
 
-Slots de buffs.
+Até dois slots antes do nível 60 e um terceiro slot a partir do nível 60. Buffs não consomem SP.
 
 ## Additional Skills
 
-Slots das demais skills.
+Lista sem limite de quantidade para as demais skills. Cada nível ativo consome provisoriamente 1 SP.
+
+## Proficiências passivas
+
+Melee, Range, Magic e Faith são progressões automáticas separadas dos slots equipáveis. O nível máximo é 99 e seus bônus por marco entram nos stats derivados.
 
 Os slots devem mostrar:
 
@@ -448,14 +452,23 @@ DamagePerCast =
 onde:
 
 ```text
-EffectiveAttack[type]
-=
-CharacterAttack[type]
-+
-WeaponDamage[type]
-+
-OtherBonuses[type]
+RawAttack[type] = 15 + WeaponDamage[type]
+
+EffectiveAttack[type] =
+  max(
+    0,
+    RawAttack[type]
+    × (
+      BaselineMultiplier[type]
+      + Σ(Attribute × AttributeCoefficient[type][attribute])
+    )
+    + Offset[type]
+  )
 ```
+
+O ATK inato padrão de 15 e o bônus `W` da arma devem permanecer em evidência
+como `(15 + Wtipo)`. Não expandir os impactos dos atributos em uma parcela para
+o personagem e outra para a arma.
 
 Exemplo:
 

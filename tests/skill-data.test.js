@@ -28,10 +28,44 @@ test('correção do jogo mantém Onslaught em additional e Soul Shot em basic', 
   assert.equal(skills.find(skill => skill.id === 'soul_shot').panelType, 'basic');
 });
 
-test('passivas e toggles ficam limitados aos slots de buff', () => {
-  const classified = skills.filter(skill => /passive|buff\s*\/\s*toggle/i.test(skill.skillKind));
-  assert.ok(classified.length > 0);
-  assert.ok(classified.every(skill => skill.panelType === 'buff'));
+test('proficiências são progressão automática e não ocupam slots de buff', () => {
+  const proficiencies = skills.filter(skill => skill.skillKind === 'Proficiency (passive)');
+  assert.deepEqual(Array.from(proficiencies, skill => skill.id).sort(), ['faith', 'magic', 'melee', 'range']);
+  assert.ok(proficiencies.every(skill => skill.panelType === 'passive'));
+  assert.ok(proficiencies.every(skill => skill.activeMax === 99));
+  assert.ok(proficiencies.every(skill => skill.spCostBase === 0));
+  const slottedBuffs = skills.filter(skill => /passive stance|buff\s*\/\s*toggle/i.test(skill.skillKind));
+  assert.ok(slottedBuffs.every(skill => skill.panelType === 'buff'));
+});
+
+test('custos cumulativos de SP incorporados excluem buffs e proficiências', () => {
+  assert.ok(skills.filter(skill => ['buff','passive'].includes(skill.panelType)).every(skill => skill.spCostBase === 0));
+  assert.ok(skills.every(skill => Array.isArray(skill.spCosts) && skill.spCosts.length === 20));
+  assert.deepEqual(Array.from(skills.find(skill => skill.id === 'heavy_strike').spCosts.slice(0,5)), [2,3,4,5,6]);
+  assert.deepEqual(Array.from(skills.find(skill => skill.id === 'slash').spCosts.slice(0,5)), [0,1,2,3,4]);
+  assert.equal(skills.find(skill => skill.id === 'blink').spCosts[19], 3);
+  skills.filter(skill=>!['buff','passive'].includes(skill.panelType)).forEach(skill=>{
+    assert.ok(skill.spCosts.every(Number.isInteger));
+    assert.ok(skill.spCosts.every((cost,index,costs)=>index===0 || cost>=costs[index-1]));
+  });
+});
+
+test('configuração inicial representa uma build limpa', () => {
+  const levels = Object.fromEntries(['melee','range','magic','faith'].map(id => [id, skills.find(skill => skill.id === id).activeLevel]));
+  assert.deepEqual(levels, { melee: 0, range: 0, magic: 0, faith: 0 });
+  assert.ok(skills.every(skill => skill.activeLevel === 0));
+});
+
+test('referência da coleta continua validando a progressão', () => {
+  const levels = { melee: 40, range: 41, magic: 45, faith: 45 };
+  const stats = formulas.characterProgression(42, { con: 0, spr: 0, luk: 0 }, levels, data.progressionModel, data.passiveRules);
+  assert.equal(Math.round(stats.maxHp), 171);
+  assert.equal(Math.round(stats.maxMp), 70);
+  assert.equal(stats.shield, 44);
+  assert.equal(stats.defense, 5.1);
+  assert.ok(stats.hpRegen > 4 && stats.hpRegen < 4.1);
+  assert.ok(stats.mpRegen > 8.3 && stats.mpRegen < 8.4);
+  assert.ok(stats.critChance > 6 && stats.critChance < 7);
 });
 
 test('Dash é uma additional skill e nenhuma skill mantém peso manual', () => {
@@ -58,7 +92,7 @@ test('descrições multi-hit e efeitos ponderados alimentam o DPS', () => {
   const trueShot = skills.find(skill => skill.id === 'true_shot');
   const darkFire = skills.find(skill => skill.id === 'dark_fire');
   assert.equal(arrowStorm.hits, 8);
-  assert.equal(onslaught.hits, 9.8);
+  assert.ok(Math.abs(formulas.hitCount(onslaught) - 19.6) < 1e-9);
   assert.equal(trueShot.hits, 2);
   assert.equal(trueShot.damageMultiplier, 4);
   assert.equal(trueShot.conditionalHits, true);
@@ -76,49 +110,9 @@ test('todos os ícones gerados existem localmente', () => {
   assert.equal(missing.length, 0);
 });
 
-test('modelo calibrado reproduz os baselines sem status', () => {
-  const unarmed = formulas.attackVectorFromAttributes(
-    { melee: 15, range: 15, magic: 15, faith: 15 },
-    { melee: 0, range: 0, magic: 0, faith: 0 },
-    {},
-    data.attributeDamageModel
-  );
-  const global30 = formulas.attackVectorFromAttributes(
-    { melee: 15, range: 15, magic: 15, faith: 15 },
-    { melee: 30, range: 30, magic: 30, faith: 30 },
-    {},
-    data.attributeDamageModel
-  );
-  assert.deepEqual(Object.values(unarmed).map(Math.round), [16, 16, 16, 16]);
-  assert.deepEqual(Object.values(global30).map(Math.round), [50, 50, 49, 50]);
-});
-
-test('modelo reproduz impactos primários e cruzados em 200 pontos', () => {
-  const base = { melee: 15, range: 15, magic: 15, faith: 15 };
-  const none = { melee: 0, range: 0, magic: 0, faith: 0 };
-  const global30 = { melee: 30, range: 30, magic: 30, faith: 30 };
-  const str = formulas.attackVectorFromAttributes(base, none, { str: 200 }, data.attributeDamageModel);
-  const dex = formulas.attackVectorFromAttributes(base, global30, { dex: 200 }, data.attributeDamageModel);
-  const int = formulas.attackVectorFromAttributes(base, none, { int: 200 }, data.attributeDamageModel);
-  const spr = formulas.attackVectorFromAttributes(base, global30, { spr: 200 }, data.attributeDamageModel);
-  assert.ok(Math.abs(str.melee - 128) < 1);
-  assert.ok(Math.abs(str.faith - 45) < 1);
-  assert.ok(Math.abs(dex.range - 389) < 1);
-  assert.ok(Math.abs(int.magic - 127) < 1);
-  assert.ok(Math.abs(spr.melee - 134) < 1);
-  assert.ok(Math.abs(spr.range - 118) < 1);
-  assert.ok(Math.abs(spr.magic - 199) < 1);
-  assert.ok(Math.abs(spr.faith - 389) < 1);
-});
-
-test('modelo isola W e a contribuição da arma sem alterar o total calibrado', () => {
-  const breakdown = formulas.attackDamageBreakdown('melee', 15, 30, { str: 100, spr: 25 }, data.attributeDamageModel);
-  const expectedMultiplier = 1.133333 + 0.03727 * 100 + 0.00931 * 25;
-  assert.ok(Math.abs(breakdown.weaponMultiplier - expectedMultiplier) < 1e-9);
-  assert.ok(Math.abs(breakdown.weaponContribution - 30 * expectedMultiplier) < 1e-9);
-  assert.ok(Math.abs(breakdown.total - (breakdown.damageWithoutWeapon + breakdown.weaponContribution)) < 1e-9);
-  assert.equal(
-    breakdown.total,
-    formulas.attackDamageFromAttributes('melee', 15, 30, { str: 100, spr: 25 }, data.attributeDamageModel)
-  );
+test('todas as skills mapeadas receberam dados de runtime', () => {
+  assert.ok(skills.every(skill => skill.confidence === 'confirmed'));
+  assert.ok(skills.every(skill => Number.isFinite(skill.cooldownMs)));
+  assert.ok(skills.every(skill => skill.mpCost && Number.isFinite(skill.mpCost.base)));
+  assert.ok(skills.every(skill => skill.mobCount && Number.isFinite(skill.mobCount.base)));
 });
